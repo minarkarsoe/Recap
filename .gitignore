@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+work/
+output/
+Sources/
+scratch/
+*.jpg
+assets/reference_voices/*.wav
+assets/bgm/*
+assets/logos/*
+!assets/**/.gitkeep
+config/cookies.txt   # a YouTube login: never commit it

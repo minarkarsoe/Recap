@@ -1,0 +1,120 @@
+# This per-job copy is how a recorded narrator gets used: settings.yaml keeps narrator_fast.wav
+# and a job that wants another voice passes --config with a file like this one.
+# Settings for job 07 (ဝံပုလွေမဲ့ ဘုရင်) ONLY -- identical to settings.yaml except that the
+# narrator voice is the reference the user recorded. Run this job with:
+#   python main.py --job <id> --config config/settings.07.yaml
+# Every other recap keeps narrator_fast.wav; load_config replaces the whole file rather
+# than merging, so this is a full copy and must be re-synced if settings.yaml changes.
+
+# Donghua voice-over pipeline settings.
+# Relative paths are resolved from the project root.
+
+paths:
+  work_dir: work          # one folder per video: downloads, script, TTS clips
+  output_dir: output      # finished videos
+
+pipeline:
+  # Long videos are processed in parts of about this length (script -> TTS -> render per part),
+  # with a preview of each finished part, then joined into one video.
+  part_minutes: 20
+
+download:
+  max_height: 1080
+  # Only one track is downloaded: the first match, uploaded subtitles before auto-generated ones.
+  # Regexes are allowed; auto-translated tracks are always skipped.
+  sub_langs: [zh-Hans, zh-CN, zh, zh-Hant, zh-TW, zh-HK, "zh.*", en]
+  # YouTube rate-limits anonymous subtitle downloads (429). Signed-in requests get through.
+  # cookies_file wins over cookies_from_browser, and is the one that works on Windows: yt-dlp
+  # cannot decrypt Chrome/Edge/Brave cookies since Chromium 127 (App-Bound Encryption).
+  # Export youtube.com cookies with a "Get cookies.txt" browser extension and point this at the file.
+  cookies_file: config/cookies.txt
+  # Lets yt-dlp fetch its own JavaScript challenge solver so it can mint the PO Token that
+  # YouTube now demands for subtitle tracks. null turns it off.
+  remote_components: ejs:github
+  cookies_from_browser: null   # e.g. "firefox" (Chromium browsers no longer work on Windows)
+
+chunking:
+  max_gap: 0.8        # subtitle lines closer than this (seconds) join the same beat
+  max_beat: 12.0      # a beat stops growing at this length (seconds)
+  max_overhang: 4.0   # narration may run this far past its beat's last line, if the next beat allows
+  tail_pad: 0.2       # silence kept before the next beat starts
+  # Stretches without dialogue longer than visual_gap become "visual" beats (up to visual_beat
+  # seconds each) where the narrator describes the action, so the voice-over never goes quiet.
+  visual_gap: 4.0
+  visual_beat: 8.0
+  visual_reserve: 2.5 # room left after a line for its narration before a visual beat starts
+
+llm:
+  endpoint: http://localhost:11434   # Ollama native API
+  model: gemma4:12b   # clearly better Burmese than qwen3:30b-a3b in our test
+  temperature: 0.7
+  num_ctx: 16384
+  think: false         # thinking mode off: faster, and JSON output is cleaner
+  batch_size: 8        # beats per request
+  vision: true         # show the model frames of each beat so it can narrate the action
+  frame_width: 448
+  max_retries: 3
+  source_language: Chinese
+  # Names and terms you want spelled the same way in every episode (source: Burmese).
+  glossary: config/glossary.yaml
+
+tts:
+  # VoxCPM2 runs in a separate process, by default ComfyUI's embedded Python.
+  python: C:\Users\user\ComfyUI_windows_portable\python_embeded\python.exe
+  comfy_root: C:\Users\user\ComfyUI_windows_portable\ComfyUI
+  voxcpm_src: C:\Users\user\ComfyUI_windows_portable\ComfyUI\custom_nodes\ComfyUI-VoxCPM2\src
+  model_dir: C:\Users\user\ComfyUI_windows_portable\ComfyUI\models\tts\VoxCPM\VoxCPM2
+  # Narrator voice. 5–15 s of clean speech. narrator_fast.wav is the fast-paced voice picked on
+  # 2026-09-22 (designed with VoxCPM2). If the file is missing, a voice is designed once from
+  # voice_design + seed_text and saved as auto_voice_wav, so every episode keeps the same voice.
+  reference_wav: assets/reference_voices/narrator_07.wav
+  # Transcript of reference_wav for continuation cloning. Leave it empty: with it, VoxCPM2 starts
+  # every line with a 0.2 s "အဲ" plus ~1 s of silence (the tail of the reference carried over).
+  # narrator_fast.wav says: ကဲ ဒီဇာတ်လမ်းလေးကို စကြည့်ရအောင်။ ငယ်ငယ်လေးကတည်းက ပါရမီရှင်လို့
+  # နာမည်ကြီးခဲ့တဲ့ ကောင်လေးဟာ တစ်ညတည်းမှာပဲ အရာအားလုံး ဆုံးရှုံးသွားခဲ့တယ်။
+  prompt_text: ""
+  auto_voice_wav: assets/reference_voices/auto_narrator.wav
+  voice_design: "A young energetic male movie-recap narrator, speaking fast with excitement, rapid lively pace"
+  seed_text: "ကဲ ဒီဇာတ်လမ်းလေးကို စကြည့်ရအောင်။ ငယ်ငယ်လေးကတည်းက ပါရမီရှင်လို့ နာမည်ကြီးခဲ့တဲ့ ကောင်လေးဟာ တစ်ညတည်းမှာပဲ အရာအားလုံး ဆုံးရှုံးသွားခဲ့တယ်။"
+  cfg_value: 2.0
+  inference_timesteps: 10
+  # Recap channels talk fast (~7.7 syllables/s in the reference video). The voice speaks ~5.9 on
+  # its own (measured on part 1 with reference-only cloning); every clip is played base_tempo
+  # faster, and up to max_tempo when a line is long.
+  syllables_per_second: 5.9
+  base_tempo: 1.25            # normal pace; scripts are sized for it
+  min_tempo: 1.1              # a short line may play this slowly to fill its slot instead of leaving silence
+  max_tempo: 1.45
+  shorten_retries: 2          # ask the LLM to rewrite lines that still don't fit
+  stretch_filter: rubberband  # rubberband (better quality) or atempo
+
+video:
+  speed: 1.05                 # playback speed of the source video
+  encoder: h264_nvenc         # h264_nvenc (GPU) or libx264
+  quality: 21                 # NVENC -cq / x264 -crf; lower = better
+  landscape: [1920, 1080]
+  portrait: [1080, 1920]
+  portrait_mode: blur         # blur (blurred background) or crop (center crop)
+  logo:
+    path: assets/logos/logo.png
+    position: top-right       # top-left, top-right, bottom-left, bottom-right
+    margin: 30
+    width: 0.12               # fraction of the output width
+    opacity: 0.85
+    bounce:                   # a small copy drifting across the frame like a DVD player's idle screen
+      enabled: true
+      width: 0.055            # fraction of the output width
+      opacity: 0.8
+      speed: [118, 77]        # pixels per second across and down; odd numbers keep the path from repeating
+      color_cycle: 12         # degrees of hue turned per second, 0 keeps the logo's own colours
+
+audio:
+  sample_rate: 48000
+  use_original: false         # false drops the source soundtrack entirely: narration (and BGM) only
+  original_volume: 0.35       # source audio level while nobody narrates, when use_original is true
+  duck_volume: 0.06           # source audio level under narration
+  duck_fade: 0.25             # seconds to fade the source audio down and back up
+  bgm_path: assets/bgm/bgm.mp3
+  bgm_volume: 0.08
+  narration_volume: 1.0
+  loudness: -14               # LUFS, YouTube's reference level

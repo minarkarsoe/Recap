@@ -1,0 +1,7 @@
+yt-dlp
+deno        # JavaScript runtime yt-dlp needs for YouTube
+curl_cffi   # lets yt-dlp impersonate a browser
+pyyaml
+httpx
+numpy
+soundfile

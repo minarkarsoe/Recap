@@ -1,0 +1,10 @@
+# Fixed Burmese spellings shared by every job.
+# These override whatever the LLM picks, so a term keeps one spelling across episodes.
+# Format:   source text: Burmese
+#
+# 萧炎: ရှောင်ယန်
+#
+# Keep this file for terms that mean the same thing in any show. A character, sect or place
+# belongs to one series, so put it in that job's own work/<id>/glossary.yaml instead, which is
+# merged on top of this one. 两 is the cautionary example: silver taels in a wuxia, plain "two"
+# in everything else.
